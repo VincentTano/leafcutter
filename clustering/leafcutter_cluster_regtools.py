@@ -223,16 +223,16 @@ def refine_clusters(options):
         
         if totN < minclureads: continue
 
-        if options.const:
-            if len(clu) == 1:
-                buf = '%s ' % chrom
-                for interval, count in clu:
-                    buf += "%d:%d" % interval + ":%d"%(count)+ " "
-                Ncl += 1
-                fout.write(buf+'\n')
+        if options.const and len(clu) == 1:
+            buf = '%s ' % chrom
+            for interval, count in clu:
+                buf += "%d:%d" % interval + ":%d"%(count)+ " "
+            Ncl += 1
+            fout.write(buf+'\n')
+            continue
         
-        for cl in refine_linked(clu):
-            rc = refine_cluster(cl,minratio, minreads)
+        for cl in refine_linked(clu,optionsconst):
+            rc = refine_cluster(cl,minratio,minreads,options.const,minclureads)
             
             if len(rc) > 0:
                 for clu in rc:
@@ -364,7 +364,7 @@ def overlaps(A,B):
         return False
     else: return True
 
-def refine_linked(clusters):
+def refine_linked(clusters,optionsconst):
 
     unassigned = [x for x in clusters[1:]]
     current = [clusters[0]]
@@ -393,10 +393,12 @@ def refine_linked(clusters):
             current = [unassigned[0]]
             splicesites = set([current[0][0][0],current[0][0][1]])
             unassigned = unassigned[1:]
+    if len(current)>0 and optionsconst:
+        newClusters.append(current)
     return newClusters
 
 
-def refine_cluster(clu, cutoff, readcutoff):
+def refine_cluster(clu, cutoff, readcutoff, optionsconst, minclureads):
     ''' for each exon in the cluster compute the ratio of reads, if smaller than cutoff,
     remove and recluster '''
     
@@ -410,7 +412,7 @@ def refine_cluster(clu, cutoff, readcutoff):
     for inter, count in clu:
         totN += count
     for inter, count in clu:
-        if (count/float(totN) >= cutoff and count >= readcutoff):
+        if (count/float(totN) >= cutoff and count >= readcutoff and totN >= minclureads):
             intervals.append(inter)
             dic[inter] = count
         else:
@@ -421,7 +423,9 @@ def refine_cluster(clu, cutoff, readcutoff):
     Atmp, B = cluster_intervals(intervals)
     A = []
     for cl in Atmp:
-        for c in refine_linked([(x,0) for x in cl]):
+        #if len(cl) == 1 and optionsconst:
+        #    A.append([cl[0]])
+        for c in refine_linked([(x,0) for x in cl],optionsconst):
             if len(c) > 0:
                 A.append([x[0] for x in c])
     
@@ -429,15 +433,20 @@ def refine_cluster(clu, cutoff, readcutoff):
         rc = [(x, dic[x]) for x in A[0]]
         if len(rc) > 1:
             if reCLU:
-                return refine_cluster([(x, dic[x]) for x in A[0]], cutoff, readcutoff)
+                return refine_cluster([(x, dic[x]) for x in A[0]], cutoff, readcutoff, optionsconst, minclureads)
             else:
+                return [[(x, dic[x]) for x in A[0]]]
+        if len(rc) == 1 and optionsconst:
                 return [[(x, dic[x]) for x in A[0]]]
         else:
             return []
+        
     NCs = []
     for c in A:
+        if len(c) == 1 and optionsconst:
+            NCs.append([(c[0],dic[c[0]])])
         if len(c) > 1:
-            NC = refine_cluster([(x, dic[x]) for x in c], cutoff, readcutoff)
+            NC = refine_cluster([(x, dic[x]) for x in c], cutoff, readcutoff, optionsconst, minclureads)
             NCs += NC
     
     return NCs
