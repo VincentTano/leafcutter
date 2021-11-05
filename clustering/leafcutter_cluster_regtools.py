@@ -231,7 +231,7 @@ def refine_clusters(options):
             fout.write(buf+'\n')
             continue
         
-        for cl in refine_linked(clu,optionsconst):
+        for cl in refine_linked(clu,options.const):
             rc = refine_cluster(cl,minratio,minreads,options.const,minclureads)
             
             if len(rc) > 0:
